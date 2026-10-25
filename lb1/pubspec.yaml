@@ -1,0 +1,7 @@
+name: vacancy_registry
+description: Console application for the vacancy registry laboratory work.
+publish_to: none
+version: 1.0.0
+
+environment:
+  sdk: ^3.6.0
