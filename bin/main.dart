@@ -1,6 +1,8 @@
 /// Console application for managing a registry of vacancies.
 library;
 
+import 'dart:io';
+
 /// A salary interval, a vacancy, and its parsing result use Records as required.
 typedef SalaryRange = ({int minimum, int maximum});
 
@@ -277,27 +279,16 @@ void main() {
   final int dartVacancyCount =
       validVacancies.where(createStackPredicate('Dart')).length;
 
-  // avoid_print is intentionally disabled: this is a console application.
-  // ignore: avoid_print
-  print(formatReport(sortedByDate));
-  // ignore: avoid_print
-  print('Успішно розібрано: ${successCounter(increment: false)}');
-  // ignore: avoid_print
-  print('Коректних вакансій: ${validVacancies.length}');
-  // ignore: avoid_print
-  print('Middle вакансій: ${middleVacancies.length}');
-  // ignore: avoid_print
-  print('Dart вакансій: $dartVacancyCount');
-  // ignore: avoid_print
-  print(
+  stdout.writeln(formatReport(sortedByDate));
+  stdout.writeln('Успішно розібрано: ${successCounter(increment: false)}');
+  stdout.writeln('Коректних вакансій: ${validVacancies.length}');
+  stdout.writeln('Middle вакансій: ${middleVacancies.length}');
+  stdout.writeln('Dart вакансій: $dartVacancyCount');
+  stdout.writeln(
     'Середня мінімальна зарплата: \$${averageMinimumSalary.toStringAsFixed(2)}',
   );
-  // ignore: avoid_print
-  print('Компанії та посади: ${companyAndPositions.join(', ')}');
-  // ignore: avoid_print
-  print('Групи: $averageMinimumSalaryByLevel');
-  // ignore: avoid_print
-  print('Найдешевша вакансія: ${sortedBySalary.first.company}');
-  // ignore: avoid_print
-  print('Помилки: ${parseErrors.join(' | ')}');
+  stdout.writeln('Компанії та посади: ${companyAndPositions.join(', ')}');
+  stdout.writeln('Групи: $averageMinimumSalaryByLevel');
+  stdout.writeln('Найдешевша вакансія: ${sortedBySalary.first.company}');
+  stdout.writeln('Помилки: ${parseErrors.join(' | ')}');
 }
