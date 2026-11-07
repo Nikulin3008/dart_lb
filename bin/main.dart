@@ -1,65 +1,38 @@
 /// Console application for managing a registry of vacancies.
 library;
 
-/// Represents a parsed salary range in US dollars.
-final class SalaryRange {
-  const SalaryRange({required this.minimum, required this.maximum});
+/// A salary interval, a vacancy, and its parsing result use Records as required.
+typedef SalaryRange = ({int minimum, int maximum});
 
-  /// Parses a value such as `\$2000-\$4000`.
-  factory SalaryRange.parse(String source) {
-    final RegExpMatch? match = pattern.firstMatch(source.trim());
-    if (match == null) {
-      throw FormatException('Некоректний формат зарплатної вилки: $source');
-    }
+typedef Vacancy = ({
+  String company,
+  String position,
+  String technologyStack,
+  String level,
+  SalaryRange salaryRange,
+  DateTime publishedAt,
+});
 
-    final int? minimum = int.tryParse(match.namedGroup('min')!);
-    final int? maximum = int.tryParse(match.namedGroup('max')!);
-    if (minimum == null || maximum == null) {
-      throw FormatException('Зарплата повинна містити цілі числа: $source');
-    }
-    return SalaryRange(minimum: minimum, maximum: maximum);
+typedef ParseResult = ({Vacancy? vacancy, String? error});
+
+final RegExp salaryRangePattern = RegExp(r'^\$(?<min>\d+)-\$(?<max>\d+)$');
+
+SalaryRange _parseSalaryRange(String source) {
+  final RegExpMatch? match = salaryRangePattern.firstMatch(source.trim());
+  if (match == null) {
+    throw FormatException('Некоректний формат зарплатної вилки: $source');
   }
 
-  /// Named groups make the format explicit and reusable in validation.
-  static final RegExp pattern = RegExp(r'^\$(?<min>\d+)-\$(?<max>\d+)$');
-
-  final int minimum;
-  final int maximum;
-
-  @override
-  String toString() => '\$$minimum-\$$maximum';
+  final int? minimum = int.tryParse(match.namedGroup('min')!);
+  final int? maximum = int.tryParse(match.namedGroup('max')!);
+  if (minimum == null || maximum == null) {
+    throw FormatException('Зарплата повинна містити цілі числа: $source');
+  }
+  return (minimum: minimum, maximum: maximum);
 }
 
-/// Domain model for a vacancy from the registry.
-final class Vacancy {
-  const Vacancy({
-    required this.company,
-    required this.position,
-    required this.technologyStack,
-    required this.level,
-    required this.salaryRange,
-    required this.publishedAt,
-  });
-
-  final String company;
-  final String position;
-  final String technologyStack;
-  final String level;
-  final SalaryRange salaryRange;
-  final DateTime publishedAt;
-}
-
-/// Keeps either a correctly parsed vacancy or a description of a damaged row.
-final class ParseResult {
-  const ParseResult.success(this.vacancy) : error = null;
-
-  const ParseResult.failure(this.error) : vacancy = null;
-
-  final Vacancy? vacancy;
-  final String? error;
-
-  bool get isSuccess => vacancy != null;
-}
+String formatSalaryRange(SalaryRange salaryRange) =>
+    '\$${salaryRange.minimum}-\$${salaryRange.maximum}';
 
 /// 1. Constant CSV input. Three rows are deliberately malformed.
 const List<String> csvRows = <String>[
@@ -99,20 +72,21 @@ ParseResult parseVacancy(String row) {
     }
 
     final DateTime publishedAt = _parseStrictIsoDate(fields[5]);
-    return ParseResult.success(
-      Vacancy(
+    return (
+      vacancy: (
         company: fields[0],
         position: fields[1],
         technologyStack: fields[2],
         level: fields[3],
-        salaryRange: SalaryRange.parse(fields[4]),
+        salaryRange: _parseSalaryRange(fields[4]),
         publishedAt: publishedAt,
       ),
+      error: null,
     );
   } on FormatException catch (error) {
-    return ParseResult.failure(error.message);
+    return (vacancy: null, error: error.message);
   } catch (error) {
-    return ParseResult.failure('Неочікувана помилка розбору: $error');
+    return (vacancy: null, error: 'Неочікувана помилка розбору: $error');
   }
 }
 
@@ -180,11 +154,11 @@ String formatReport(
   for (final Vacancy vacancy in vacancies) {
     // 9. replaceAllMapped masks every salary digit in the public report.
     final String salary = maskSalary
-        ? vacancy.salaryRange.toString().replaceAllMapped(
+        ? formatSalaryRange(vacancy.salaryRange).replaceAllMapped(
               RegExp(r'\d'),
               (Match _) => '*',
             )
-        : vacancy.salaryRange.toString();
+        : formatSalaryRange(vacancy.salaryRange);
     // 10. Date arithmetic: the vacancy age comes from DateTime.difference.
     final Duration activeFor = currentDate.difference(vacancy.publishedAt);
     final int activeDays = activeFor.isNegative ? 0 : activeFor.inDays;
