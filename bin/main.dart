@@ -218,6 +218,7 @@ void main() {
   final int Function({bool increment}) successCounter = createSuccessCounter();
   final List<ParseResult> results = csvRows.map(parseVacancy).toList();
   final List<String> parseErrors = <String>[];
+  final List<String> validationErrors = <String>[];
   final List<Vacancy> validVacancies = <Vacancy>[];
 
   for (final ParseResult result in results) {
@@ -231,7 +232,7 @@ void main() {
     if (violations.isEmpty) {
       validVacancies.add(vacancy);
     } else {
-      parseErrors.add('${vacancy.company}: ${violations.join('; ')}');
+      validationErrors.add('${vacancy.company}: ${violations.join('; ')}');
     }
   }
 
@@ -289,6 +290,11 @@ void main() {
   );
   stdout.writeln('Компанії та посади: ${companyAndPositions.join(', ')}');
   stdout.writeln('Групи: $averageMinimumSalaryByLevel');
-  stdout.writeln('Найдешевша вакансія: ${sortedBySalary.first.company}');
-  stdout.writeln('Помилки: ${parseErrors.join(' | ')}');
+  if (sortedBySalary.isNotEmpty) {
+    stdout.writeln('Найдешевша вакансія: ${sortedBySalary.first.company}');
+  } else {
+    stdout.writeln('Найдешевша вакансія: немає коректних вакансій');
+  }
+  stdout.writeln('Помилки парсингу: ${parseErrors.join(' | ')}');
+  stdout.writeln('Помилки валідації: ${validationErrors.join(' | ')}');
 }
