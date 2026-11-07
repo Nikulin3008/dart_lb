@@ -17,18 +17,24 @@ typedef ParseResult = ({Vacancy? vacancy, String? error});
 
 final RegExp salaryRangePattern = RegExp(r'^\$(?<min>\d+)-\$(?<max>\d+)$');
 
-SalaryRange _parseSalaryRange(String source) {
+({SalaryRange? salaryRange, String? error}) _parseSalaryRange(String source) {
   final RegExpMatch? match = salaryRangePattern.firstMatch(source.trim());
   if (match == null) {
-    throw FormatException('Некоректний формат зарплатної вилки: $source');
+    return (
+      salaryRange: null,
+      error: 'Некоректний формат зарплатної вилки: $source',
+    );
   }
 
   final int? minimum = int.tryParse(match.namedGroup('min')!);
   final int? maximum = int.tryParse(match.namedGroup('max')!);
   if (minimum == null || maximum == null) {
-    throw FormatException('Зарплата повинна містити цілі числа: $source');
+    return (
+      salaryRange: null,
+      error: 'Зарплата повинна містити цілі числа: $source',
+    );
   }
-  return (minimum: minimum, maximum: maximum);
+  return (salaryRange: (minimum: minimum, maximum: maximum), error: null);
 }
 
 String formatSalaryRange(SalaryRange salaryRange) =>
@@ -60,48 +66,64 @@ const List<String> csvRows = <String>[
 
 /// 2. Parses one CSV row without allowing malformed input to stop the program.
 ParseResult parseVacancy(String row) {
-  try {
-    final List<String> fields =
-        row.split(',').map((String item) => item.trim()).toList();
-    if (fields.length != 6) {
-      throw FormatException('Очікується 6 полів, отримано ${fields.length}');
-    }
-
-    if (fields.any((String field) => field.isEmpty)) {
-      throw const FormatException('Обов\'язкове поле не може бути порожнім');
-    }
-
-    final DateTime publishedAt = _parseStrictIsoDate(fields[5]);
+  final List<String> fields =
+      row.split(',').map((String item) => item.trim()).toList();
+  if (fields.length != 6) {
     return (
-      vacancy: (
-        company: fields[0],
-        position: fields[1],
-        technologyStack: fields[2],
-        level: fields[3],
-        salaryRange: _parseSalaryRange(fields[4]),
-        publishedAt: publishedAt,
-      ),
-      error: null,
+      vacancy: null,
+      error: 'Очікується 6 полів, отримано ${fields.length}',
     );
-  } on FormatException catch (error) {
-    return (vacancy: null, error: error.message);
-  } catch (error) {
-    return (vacancy: null, error: 'Неочікувана помилка розбору: $error');
   }
+
+  if (fields.any((String field) => field.isEmpty)) {
+    return (vacancy: null, error: 'Обов\'язкове поле не може бути порожнім');
+  }
+
+  final ({SalaryRange? salaryRange, String? error}) salaryResult =
+      _parseSalaryRange(fields[4]);
+  final SalaryRange? salaryRange = salaryResult.salaryRange;
+  if (salaryRange == null) {
+    return (vacancy: null, error: salaryResult.error);
+  }
+
+  final ({DateTime? date, String? error}) dateResult =
+      _parseStrictIsoDate(fields[5]);
+  final DateTime? publishedAt = dateResult.date;
+  if (publishedAt == null) {
+    return (vacancy: null, error: dateResult.error);
+  }
+
+  return (
+    vacancy: (
+      company: fields[0],
+      position: fields[1],
+      technologyStack: fields[2],
+      level: fields[3],
+      salaryRange: salaryRange,
+      publishedAt: publishedAt,
+    ),
+    error: null,
+  );
 }
 
-/// Prevents DateTime.parse from silently normalizing impossible calendar dates.
-DateTime _parseStrictIsoDate(String source) {
+/// Rejects impossible calendar dates that DateTime would otherwise normalize.
+({DateTime? date, String? error}) _parseStrictIsoDate(String source) {
   if (!RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(source)) {
-    throw FormatException('Дата має формат YYYY-MM-DD: $source');
+    return (date: null, error: 'Дата має формат YYYY-MM-DD: $source');
   }
 
-  final DateTime parsed = DateTime.parse(source);
-  final String normalized = parsed.toIso8601String().substring(0, 10);
-  if (normalized != source) {
-    throw FormatException('Некоректна календарна дата: $source');
+  final int? year = int.tryParse(source.substring(0, 4));
+  final int? month = int.tryParse(source.substring(5, 7));
+  final int? day = int.tryParse(source.substring(8, 10));
+  if (year == null || month == null || day == null) {
+    return (date: null, error: 'Дата має формат YYYY-MM-DD: $source');
   }
-  return parsed;
+
+  final DateTime parsed = DateTime(year, month, day);
+  if (parsed.year != year || parsed.month != month || parsed.day != day) {
+    return (date: null, error: 'Некоректна календарна дата: $source');
+  }
+  return (date: parsed, error: null);
 }
 
 /// 3. Returns every business-rule violation found in one vacancy.
@@ -155,9 +177,9 @@ String formatReport(
     // 9. replaceAllMapped masks every salary digit in the public report.
     final String salary = maskSalary
         ? formatSalaryRange(vacancy.salaryRange).replaceAllMapped(
-              RegExp(r'\d'),
-              (Match _) => '*',
-            )
+            RegExp(r'\d'),
+            (Match _) => '*',
+          )
         : formatSalaryRange(vacancy.salaryRange);
     // 10. Date arithmetic: the vacancy age comes from DateTime.difference.
     final Duration activeFor = currentDate.difference(vacancy.publishedAt);
