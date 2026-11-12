@@ -3,149 +3,41 @@ library;
 
 import 'dart:io';
 
-abstract class Identifiable {
-  String get id;
-}
-
-mixin Validatable on Identifiable {
-  bool get isValid;
-  
-  List<String> validate() {
-    if (!isValid) return ['Сутність $id не пройшла внутрішню валідацію'];
-    return [];
-  }
-}
-
-sealed class CandidateLevel {
-  const CandidateLevel();
-
-  factory CandidateLevel.fromString(String level) {
-    return switch (level.trim().toLowerCase()) {
-      'junior' => const Junior(),
-      'middle' => const Middle(),
-      'senior' => const Senior(),
-      _ => throw FormatException('Невідомий рівень: $level'),
-    };
-  }
-}
-
-class Junior extends CandidateLevel { const Junior(); }
-class Middle extends CandidateLevel { const Middle(); }
-class Senior extends CandidateLevel { const Senior(); }
-
-enum WorkFormat {
-  remote('Віддалено', true),
-  office('Офіс', false),
-  hybrid('Гібрид', true);
-
-  final String displayName;
-  final bool isFlexible;
-  const WorkFormat(this.displayName, this.isFlexible);
-
-  String getDescription() => '$displayName (Гнучкий графік: $isFlexible)';
-}
-
 /// A salary interval, a vacancy, and its parsing result use Records as required.
-class Vacancy extends Identifiable with Validatable {
-  final String id;
-  final String company;
-  final String position;
-  final List<String> technologyStack;
-  final int minSalary;
-  final int maxSalary;
-  final DateTime publishedAt;
-  final CandidateLevel level;
-  final WorkFormat workFormat;
+typedef SalaryRange = ({int minimum, int maximum});
 
-  const Vacancy({
-    required this.id,
-    required this.company,
-    required this.position,
-    required this.technologyStack,
-    required this.minSalary,
-    required this.maxSalary,
-    required this.publishedAt,
-    required this.level,
-    required this.workFormat,
-  });
+typedef Vacancy = ({
+  String company,
+  String position,
+  String technologyStack,
+  String level,
+  SalaryRange salaryRange,
+  DateTime publishedAt,
+});
 
-@override
-  bool get isValid => minSalary > 0 && maxSalary >= minSalary && publishedAt.isBefore(DateTime.now());
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is Vacancy &&
-          runtimeType == other.runtimeType &&
-          id == other.id &&
-          company == other.company &&
-          position == other.position &&
-          minSalary == other.minSalary;
-
-  @override
-  int get hashCode => Object.hash(id, company, position, minSalary);
-
-  @override
-  String toString() => 'Vacancy($company, $position, \$$minSalary-\$$maxSalary)';
-}
-
-class CompanyProfile extends Identifiable with Validatable {
-  @override
-  final String id;
-  final String name;
-
-  const CompanyProfile(this.id, this.name);
-
-  @override
-  bool get isValid => name.isNotEmpty;
-}
-
-class Repository<T extends Identifiable> {
-  final Map<String, T> _items = {};
-
-  void add(T item) => _items[item.id] = item;
-  T? findById(String id) => _items[id];
-  Iterable<T> where(bool Function(T) test) => _items.values.where(test);
-  List<T> get all => _items.values.toList();
-}
-
-static final Map<String, Vacancy> _cache = {};
-
-  Vacancy.fromCsv(String line)
-      : id = '${line.split(',')[0].trim()}_${line.split(',')[1].trim()}'.toLowerCase(),
-        company = line.split(',')[0].trim(),
-        position = line.split(',')[1].trim(),
-        technologyStack = line.split(',')[2].trim().split('|'),
-        minSalary = _parseSalary(line.split(',')[4].trim()).$1,
-        maxSalary = _parseSalary(line.split(',')[4].trim()).$2,
-        publishedAt = _parseStrictIsoDate(line.split(',')[5].trim());
-        level = CandidateLevel.fromString(line.split(',')[3].trim()),
-        workFormat = WorkFormat.remote,
-
-  factory Vacancy.cached(Vacancy instance) {
-    return _cache.putIfAbsent(instance.id, () => instance);
-  }
-
-  static (int, int) _parseSalary(String source) {
-    final match = RegExp(r'^\$(\d+)-\$(\d+)$').firstMatch(source);
-    if (match == null) throw FormatException('Некоректна зарплата: $source');
-    return (int.parse(match.group(1)!), int.parse(match.group(2)!));
-  }
-
-  static DateTime _parseStrictIsoDate(String source) {
-    if (!RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(source)) {
-      throw FormatException('Формат має бути YYYY-MM-DD: $source');
-    }
-    final parsed = DateTime.parse(source);
-    if (source != parsed.toIso8601String().substring(0, 10)) {
-      throw const FormatException('Неіснуюча календарна дата');
-    }
-    return parsed;
-  }
+typedef ParseResult = ({Vacancy? vacancy, String? error});
 
 final RegExp salaryRangePattern = RegExp(r'^\$(?<min>\d+)-\$(?<max>\d+)$');
 
+({SalaryRange? salaryRange, String? error}) _parseSalaryRange(String source) {
+  final RegExpMatch? match = salaryRangePattern.firstMatch(source.trim());
+  if (match == null) {
+    return (
+      salaryRange: null,
+      error: 'Некоректний формат зарплатної вилки: $source',
+    );
+  }
 
+  final int? minimum = int.tryParse(match.namedGroup('min')!);
+  final int? maximum = int.tryParse(match.namedGroup('max')!);
+  if (minimum == null || maximum == null) {
+    return (
+      salaryRange: null,
+      error: 'Зарплата повинна містити цілі числа: $source',
+    );
+  }
+  return (salaryRange: (minimum: minimum, maximum: maximum), error: null);
+}
 
 String formatSalaryRange(SalaryRange salaryRange) =>
     '\$${salaryRange.minimum}-\$${salaryRange.maximum}';
@@ -174,9 +66,67 @@ const List<String> csvRows = <String>[
   'FutureRole,Platform Engineer,Dart|Docker,Expert,\$2500-\$3200,2099-01-01',
 ];
 
+/// 2. Parses one CSV row without allowing malformed input to stop the program.
+ParseResult parseVacancy(String row) {
+  final List<String> fields =
+      row.split(',').map((String item) => item.trim()).toList();
+  if (fields.length != 6) {
+    return (
+      vacancy: null,
+      error: 'Очікується 6 полів, отримано ${fields.length}',
+    );
+  }
 
+  if (fields.any((String field) => field.isEmpty)) {
+    return (vacancy: null, error: 'Обов\'язкове поле не може бути порожнім');
+  }
 
+  final ({SalaryRange? salaryRange, String? error}) salaryResult =
+      _parseSalaryRange(fields[4]);
+  final SalaryRange? salaryRange = salaryResult.salaryRange;
+  if (salaryRange == null) {
+    return (vacancy: null, error: salaryResult.error);
+  }
 
+  final ({DateTime? date, String? error}) dateResult =
+      _parseStrictIsoDate(fields[5]);
+  final DateTime? publishedAt = dateResult.date;
+  if (publishedAt == null) {
+    return (vacancy: null, error: dateResult.error);
+  }
+
+  return (
+    vacancy: (
+      company: fields[0],
+      position: fields[1],
+      technologyStack: fields[2],
+      level: fields[3],
+      salaryRange: salaryRange,
+      publishedAt: publishedAt,
+    ),
+    error: null,
+  );
+}
+
+/// Rejects impossible calendar dates that DateTime would otherwise normalize.
+({DateTime? date, String? error}) _parseStrictIsoDate(String source) {
+  if (!RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(source)) {
+    return (date: null, error: 'Дата має формат YYYY-MM-DD: $source');
+  }
+
+  final int? year = int.tryParse(source.substring(0, 4));
+  final int? month = int.tryParse(source.substring(5, 7));
+  final int? day = int.tryParse(source.substring(8, 10));
+  if (year == null || month == null || day == null) {
+    return (date: null, error: 'Дата має формат YYYY-MM-DD: $source');
+  }
+
+  final DateTime parsed = DateTime(year, month, day);
+  if (parsed.year != year || parsed.month != month || parsed.day != day) {
+    return (date: null, error: 'Некоректна календарна дата: $source');
+  }
+  return (date: parsed, error: null);
+}
 
 /// 3. Returns every business-rule violation found in one vacancy.
 List<String> validateVacancy(Vacancy vacancy, {DateTime? now}) {
