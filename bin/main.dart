@@ -4,18 +4,41 @@ library;
 import 'dart:io';
 
 /// A salary interval, a vacancy, and its parsing result use Records as required.
-typedef SalaryRange = ({int minimum, int maximum});
+class Vacancy {
+  final String id;
+  final String company;
+  final String position;
+  final List<String> technologyStack;
+  final int minSalary;
+  final int maxSalary;
+  final DateTime publishedAt;
 
-typedef Vacancy = ({
-  String company,
-  String position,
-  String technologyStack,
-  String level,
-  SalaryRange salaryRange,
-  DateTime publishedAt,
-});
+  const Vacancy({
+    required this.id,
+    required this.company,
+    required this.position,
+    required this.technologyStack,
+    required this.minSalary,
+    required this.maxSalary,
+    required this.publishedAt,
+  });
 
-typedef ParseResult = ({Vacancy? vacancy, String? error});
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is Vacancy &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          company == other.company &&
+          position == other.position &&
+          minSalary == other.minSalary;
+
+  @override
+  int get hashCode => Object.hash(id, company, position, minSalary);
+
+  @override
+  String toString() => 'Vacancy($company, $position, \$$minSalary-\$$maxSalary)';
+}
 
 final RegExp salaryRangePattern = RegExp(r'^\$(?<min>\d+)-\$(?<max>\d+)$');
 
