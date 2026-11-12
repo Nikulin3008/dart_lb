@@ -3,6 +3,19 @@ library;
 
 import 'dart:io';
 
+abstract class Identifiable {
+  String get id;
+}
+
+mixin Validatable on Identifiable {
+  bool get isValid;
+  
+  List<String> validate() {
+    if (!isValid) return ['Сутність $id не пройшла внутрішню валідацію'];
+    return [];
+  }
+}
+
 sealed class CandidateLevel {
   const CandidateLevel();
 
@@ -33,7 +46,7 @@ enum WorkFormat {
 }
 
 /// A salary interval, a vacancy, and its parsing result use Records as required.
-class Vacancy {
+class Vacancy extends Identifiable with Validatable {
   final String id;
   final String company;
   final String position;
@@ -41,6 +54,8 @@ class Vacancy {
   final int minSalary;
   final int maxSalary;
   final DateTime publishedAt;
+  final CandidateLevel level;
+  final WorkFormat workFormat;
 
   const Vacancy({
     required this.id,
@@ -50,7 +65,12 @@ class Vacancy {
     required this.minSalary,
     required this.maxSalary,
     required this.publishedAt,
+    required this.level,
+    required this.workFormat,
   });
+
+@override
+  bool get isValid => minSalary > 0 && maxSalary >= minSalary && publishedAt.isBefore(DateTime.now());
 
   @override
   bool operator ==(Object other) =>
@@ -69,6 +89,26 @@ class Vacancy {
   String toString() => 'Vacancy($company, $position, \$$minSalary-\$$maxSalary)';
 }
 
+class CompanyProfile extends Identifiable with Validatable {
+  @override
+  final String id;
+  final String name;
+
+  const CompanyProfile(this.id, this.name);
+
+  @override
+  bool get isValid => name.isNotEmpty;
+}
+
+class Repository<T extends Identifiable> {
+  final Map<String, T> _items = {};
+
+  void add(T item) => _items[item.id] = item;
+  T? findById(String id) => _items[id];
+  Iterable<T> where(bool Function(T) test) => _items.values.where(test);
+  List<T> get all => _items.values.toList();
+}
+
 static final Map<String, Vacancy> _cache = {};
 
   Vacancy.fromCsv(String line)
@@ -79,6 +119,8 @@ static final Map<String, Vacancy> _cache = {};
         minSalary = _parseSalary(line.split(',')[4].trim()).$1,
         maxSalary = _parseSalary(line.split(',')[4].trim()).$2,
         publishedAt = _parseStrictIsoDate(line.split(',')[5].trim());
+        level = CandidateLevel.fromString(line.split(',')[3].trim()),
+        workFormat = WorkFormat.remote,
 
   factory Vacancy.cached(Vacancy instance) {
     return _cache.putIfAbsent(instance.id, () => instance);
