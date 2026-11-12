@@ -3,6 +3,35 @@ library;
 
 import 'dart:io';
 
+sealed class CandidateLevel {
+  const CandidateLevel();
+
+  factory CandidateLevel.fromString(String level) {
+    return switch (level.trim().toLowerCase()) {
+      'junior' => const Junior(),
+      'middle' => const Middle(),
+      'senior' => const Senior(),
+      _ => throw FormatException('Невідомий рівень: $level'),
+    };
+  }
+}
+
+class Junior extends CandidateLevel { const Junior(); }
+class Middle extends CandidateLevel { const Middle(); }
+class Senior extends CandidateLevel { const Senior(); }
+
+enum WorkFormat {
+  remote('Віддалено', true),
+  office('Офіс', false),
+  hybrid('Гібрид', true);
+
+  final String displayName;
+  final bool isFlexible;
+  const WorkFormat(this.displayName, this.isFlexible);
+
+  String getDescription() => '$displayName (Гнучкий графік: $isFlexible)';
+}
+
 /// A salary interval, a vacancy, and its parsing result use Records as required.
 class Vacancy {
   final String id;
