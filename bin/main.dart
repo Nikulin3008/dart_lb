@@ -9,6 +9,7 @@ import 'dart:io';
 
 /// Базовий інтерфейс для узагальненого сховища
 abstract class Identifiable {
+  const Identifiable();
   String get id;
 }
 
